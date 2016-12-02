@@ -3768,7 +3768,11 @@ class DataFrameGroupBy(NDFrameGroupBy):
         return self._reindex_output(result)._convert(datetime=True)
 
     def _wrap_transformed_output(self, output, names=None):
-        return DataFrame(output, index=self.obj.index)
+        # might instead want to modify GroupBy.shift only, rather than the result of any cython transform
+        if len(output.columns) == len(self.obj.columns):
+            return DataFrame(output, index=self.obj.index, self.obj.columns)
+        return DataFrame(output, index=self.obj.index,
+                         columns=[x for x in self.obj.columns if x in output])
 
     def _wrap_agged_blocks(self, items, blocks):
         if not self.as_index:
