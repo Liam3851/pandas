@@ -3770,7 +3770,7 @@ class DataFrameGroupBy(NDFrameGroupBy):
     def _wrap_transformed_output(self, output, names=None):
         # might instead want to modify GroupBy.shift only, rather than the result of any cython transform
         if len(output.columns) == len(self.obj.columns):
-            return DataFrame(output, index=self.obj.index, self.obj.columns)
+            return DataFrame(output, index=self.obj.index, columns=self.obj.columns)
         return DataFrame(output, index=self.obj.index,
                          columns=[x for x in self.obj.columns if x in output])
 
