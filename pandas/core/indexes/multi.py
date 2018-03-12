@@ -532,12 +532,6 @@ class MultiIndex(Index):
         return result
 
     def _shallow_copy_with_infer(self, values=None, **kwargs):
-        # On equal MultiIndexes the difference is empty.
-        # Therefore, an empty MultiIndex is returned GH13490
-        if len(values) == 0:
-            return MultiIndex(levels=[[] for _ in range(self.nlevels)],
-                              labels=[[] for _ in range(self.nlevels)],
-                              **kwargs)
         return self._shallow_copy(values, **kwargs)
 
     @Appender(_index_shared_docs['__contains__'] % _index_doc_kwargs)
@@ -554,8 +548,17 @@ class MultiIndex(Index):
     @Appender(_index_shared_docs['_shallow_copy'])
     def _shallow_copy(self, values=None, **kwargs):
         if values is not None:
+            # On equal MultiIndexes the difference is empty.
+            # Therefore, an empty MultiIndex is returned GH13490
             if 'name' in kwargs:
                 kwargs['names'] = kwargs.pop('name', None)
+            elif 'names' not in kwargs:
+                kwargs['names'] = self.names
+            if len(values) == 0:
+                return MultiIndex(levels=[[] for _ in range(self.nlevels)],
+                                  labels=[[] for _ in range(self.nlevels)],
+                                  **kwargs)
+
             # discards freq
             kwargs.pop('freq', None)
             return MultiIndex.from_tuples(values, **kwargs)

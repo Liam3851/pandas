@@ -2498,6 +2498,16 @@ class TestMultiIndex(Base):
         exp = pd.MultiIndex.from_arrays([eidx1, eidx2])
         tm.assert_index_equal(result, exp)
 
+    def test_unique_empty(self):
+        # GH 20308: calling unique on empty multiindex raises error
+        empty_idx = pd.MultiIndex(levels=[[1, 3], [2, 4]],
+                                  labels=[[], []],
+                                  names=['a', 'b'])
+        exp = pd.MultiIndex(levels=[[], []],
+                            labels=[[], []],
+                            names=['a', 'b'])
+        tm.assert_index_equal(empty_idx.unique(), exp)
+
     def test_tolist(self):
         result = self.index.tolist()
         exp = list(self.index.values)
