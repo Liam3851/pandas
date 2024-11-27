@@ -1,3 +1,4 @@
+* eol=lf
 * text=auto
 # enforce text on certain files
 *.py text
