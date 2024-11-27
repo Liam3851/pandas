@@ -4265,6 +4265,142 @@ cdef class FY5253Quarter(FY5253Mixin):
         )
 
 
+cdef class FY5253Month(FY5253Mixin):
+    """
+    DateOffset increments between month-end dates for 52-53 week fiscal year.
+
+    This offset is used to generate month-end dates that are 4 weeks and 8 weeks
+    from the prior FY5253Quarter. If we're in the quarter with the extra week,
+    the extra week should be in the middle month (i.e., month-ends 4 weeks and 9 weeks
+    from the prior quarter end).
+
+    Attributes
+    ----------
+    n : int
+        The number of months represented.
+    normalize : bool, default False
+        Normalize start/end dates to midnight before generating date range.
+    weekday : int {0, 1, ..., 6}, default 0
+        A specific integer for the day of the week.
+    startingMonth : int {1, 2, ..., 12}, default 1
+        The month in which fiscal years end.
+    qtr_with_extra_week : int {1, 2, 3, 4}, default 1
+        The quarter number that has the leap or 14 week when needed.
+    variation : str, default "nearest"
+        Method of employing 4-4-5 calendar.
+
+    See Also
+    --------
+    :class:`~pandas.tseries.offsets.DateOffset` : Standard kind of date increment.
+    """
+
+    _prefix = "REM"
+    _attributes = tuple(
+        [
+            "n",
+            "normalize",
+            "weekday",
+            "startingMonth",
+            "qtr_with_extra_week",
+            "variation",
+        ]
+    )
+
+    cdef readonly:
+        int qtr_with_extra_week
+
+    @cache_readonly
+    def _offset(self):
+        return FY5253Quarter(
+            startingMonth=self.startingMonth,
+            weekday=self.weekday,
+            variation=self.variation,
+        )
+
+    def __init__(
+        self,
+        n=1,
+        normalize=False,
+        weekday=0,
+        startingMonth=1,
+        qtr_with_extra_week=1,
+        variation="nearest",
+    ):
+        FY5253Mixin.__init__(
+            self, n, normalize, weekday, startingMonth, variation
+        )
+        self.qtr_with_extra_week = qtr_with_extra_week
+
+    cpdef __setstate__(self, state):
+        FY5253Mixin.__setstate__(self, state)
+        self.qtr_with_extra_week = state.pop("qtr_with_extra_week")
+
+    @apply_wraps
+    def _apply(self, other: datetime) -> datetime:
+        n = self.n
+        prev_quarter_end = self._offset.rollback(other)
+        weeks = self.get_weeks(prev_quarter_end)
+
+        if n > 0:
+            for _ in range(n):
+                prev_quarter_end = self._shift_month(prev_quarter_end, weeks)
+        else:
+            for _ in range(-n):
+                prev_quarter_end = self._shift_month(prev_quarter_end, weeks, forward=False)
+
+        return prev_quarter_end
+
+    def _shift_month(self, dt: datetime, weeks: list, forward=True) -> datetime:
+        if forward:
+            if dt == self._offset.rollback(dt):
+                dt = _shift_day(dt, days=weeks[0] * 7)
+            elif dt == _shift_day(self._offset.rollback(dt), days=weeks[0] * 7):
+                dt = _shift_day(dt, days=weeks[1] * 7)
+            else:
+                dt = _shift_day(dt, days=weeks[2] * 7)
+        else:
+            if dt == _shift_day(self._offset.rollback(dt), days=weeks[2] * 7):
+                dt = _shift_day(dt, days=-weeks[1] * 7)
+            elif dt == _shift_day(self._offset.rollback(dt), days=weeks[1] * 7):
+                dt = _shift_day(dt, days=-weeks[0] * 7)
+            else:
+                dt = self._offset.rollback(dt)
+        return dt
+
+    def get_weeks(self, dt: datetime) -> list:
+        qtr_lens = self._offset.get_weeks(dt)
+        if qtr_lens[self.qtr_with_extra_week - 1] == 14:
+            return [4, 5, 5]
+        else:
+            return [4, 4, 5]
+
+    def is_on_offset(self, dt: datetime) -> bool:
+        if self.normalize and not _is_normalized(dt):
+            return False
+        if self._offset.is_on_offset(dt):
+            return True
+
+        prev_quarter_end = self._offset.rollback(dt)
+        weeks = self.get_weeks(prev_quarter_end)
+
+        current = prev_quarter_end
+        for week in weeks:
+            current = _shift_day(current, days=week * 7)
+            if dt == current:
+                return True
+        return False
+
+    @property
+    def rule_code(self) -> str:
+        suffix = FY5253Mixin.rule_code.__get__(self)
+        return f"{suffix}-M"
+
+    @classmethod
+    def _from_name(cls, *args):
+        return cls(
+            **dict(FY5253._parse_suffix(*args[:-1]), qtr_with_extra_week=int(args[-1]))
+        )
+
 cdef class Easter(SingleConstructorOffset):
     """
     DateOffset for the Easter holiday using logic defined in dateutil.
